@@ -1,0 +1,2 @@
+# BetaTestingCubeGame
+Бета тестирование CubeGame.
