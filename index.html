@@ -1,0 +1,908 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.157.0/build/three.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/cannon@0.20.0/build/cannon.min.js"></script>
+    <meta charset="UTF-8">
+    <title>Заголовок страницы</title>
+    <script src="https://unpkg.com/peerjs@1.5.2/dist/peerjs.min.js"></script>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <style>
+  body{margin:0;overflow:hidden;background:#000;touch-action:none}
+#up,#down,#left,#right,#break,#place,#u,#d {
+position:fixed;
+width:60px;height:60px;
+border-radius:50%;
+border:none;
+background:rgba(255,255,255,.6);
+font-size:24px;
+touch-action: none;
+}
+#c button {
+  font-size: 70%;
+  color: black;
+  background-color: #c0c0c0;
+  border: 2px solid;
+  border-color: #ffffff #808080 #808080 #ffffff;
+  padding: 2px 10px;
+  box-shadow: inset -1px -1px 0 #000000, inset 1px 1px 0 #dfdfdf;
+  cursor: default;
+}
+* {
+    user-select: none;
+}
+#up{bottom:210px;left:80px}
+#down{bottom:90px;left:80px}
+#left{bottom:150px;left:20px}
+#right{bottom:150px;left:140px}
+#break{right:20px;bottom:150px;background:#f55}
+#place{right:100px;bottom:150px;background:#5f5}
+#u{bottom:210px;left:180px}
+#d{bottom:90px;left:180px}
+.center-box {
+  position: fixed;      /* фиксируется относительно экрана */
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%); /* точное центрирование */
+  color: white;  
+  z-index: 9999;        /* поверх всех элементов */
+}
+#p2p {
+  position: fixed;      /* фиксируется относительно экрана */
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%); /* точное центрирование */
+  z-index: 9999;        /* поверх всех элементов */
+}
+#c {
+    display: none;
+    background: ligthgrey;
+    color: black;
+    z-index: 10000;
+}
+#idv button:hover {
+    border: 3px solid #00abff;
+}
+.cs {
+      position: fixed;      /* фиксируется относительно экрана */
+  top: 15%;
+  left: 50%;
+  transform: translate(-50%, -50%); /* точное центрирование */
+  z-index: 9999;        /* поверх всех элементов */
+  display: flex;
+}
+#log {
+    height: 5vh;
+    overflow-y: auto;
+    border: 1px solid #ccc;
+    padding: 5px;
+    background: #f9f9f9;
+    font-size: 12px;
+}
+#log, #p2p {
+    user-select: text;
+}
+#p2p span {
+user-select: text !important;
+}
+#np {
+      position: fixed;      /* фиксируется относительно экрана */
+  top: 95%;
+  z-index: 9999;        /* поверх всех элементов */
+}
+    </style>
+</head>
+<body>
+    <div id="log">Это чат! Общайся тут с другими игроками.</div>
+    <input id="msg" placeholder="Сообщение...">
+    <button onclick="sendMsg()">Send</button>
+    <button id="up">▲</button>
+<button id="down">▼</button>
+<button id="left">◀</button>
+<button id="right">▶</button>
+<button id="break">⛏</button>
+<button id="place">🧱</button>
+<button id="u">↑</button>
+<button id="d">↓</button>
+<div class="center-box">+</div>
+<div class="center-box" id="c">
+    <button onclick="c.style.display='none';">X</button>
+Создать<br>
+<button onclick="cr(0)">Крылья</button>
+<button onclick="cr(1)">4 доски</button>
+<div>Прочность крыльев: <span id="wwi">459</span></div>
+<iframe id="h"></iframe></div>
+
+<div id="idv" style="
+    position: fixed;
+    top: 90%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    color: white;
+    z-index: 9999;
+">|<button onclick="c.style.display='block';">***</button></div>
+<div id="np">♥️ <span id="hp"></span> <span id="eat"></span></div>
+<div class="cs">
+<div><span id="fps">?</span> FPS</div>
+<button onclick="save()">
+    Сохранить мир
+</button>
+<button onclick="indexedDB.deleteDatabase('GameDB');location.reload();">
+    Удалить мир
+</button>
+<button onclick="p2p.style.display='block';">
+    Играть с другом!
+</button>
+</div>
+<div id="p2p">
+    <button onclick="p2p.style.display='none';">
+    X
+</button>
+<div>Твой ID: <span id="myid">...</span></div>
+<input id="peerId" placeholder="ID друга">
+<button onclick="connect()">Подключиться</button>
+<hr></div>
+    <script>
+const scene = new THREE.Scene();
+const camera = new THREE.PerspectiveCamera(100, window.innerWidth / window.innerHeight, 0.1, 1000);
+scene.background=new THREE.Color(0x87ceeb)
+const renderer = new THREE.WebGLRenderer({ antialias: true });
+renderer.setSize(window.innerWidth, window.innerHeight);
+document.body.appendChild(renderer.domElement);
+const geometry = new THREE.BoxGeometry(1, 1, 1); 
+const material = new THREE.MeshBasicMaterial({ color: 0x00ff00 });
+const cube = new THREE.Mesh(geometry, material);
+scene.add(cube);
+var light=new THREE.DirectionalLight(0xffffff,1);
+light.position.set(10,20,10);
+scene.add(light);
+var ambientLight = new THREE.AmbientLight(0xffffff, 0.5);
+scene.add(ambientLight);
+var b=new THREE.MeshLambertMaterial({color:0x8b5a2b});
+var tr=new THREE.MeshLambertMaterial({color:0x65ff00});
+var st=0.5;
+var yaw=0,pitch=0
+var lastX=0,lastY=0
+var ray=new THREE.Raycaster();
+var blocks=[];
+hpvmax=10;
+hpv=10;
+eatv=10;
+ww=459;
+// P2P
+p2p = document.getElementById("p2p");
+const peer = new Peer();
+let conn = null;
+
+peer.on("open", id => {
+  document.getElementById("myid").textContent = id;
+});
+
+peer.on("connection", c => {
+  conn = c;
+  setupConn();
+});
+
+function connect(){
+  const id = document.getElementById("peerId").value;
+  conn = peer.connect(id);
+  conn.on("open", setupConn);
+}
+
+function setupConn(){
+  conn.on("data", data => {
+    text = data;
+    if(text.includes("/give")) {
+      text=text.replace("/give","").trim();
+      i=parseInt(text) || -1;
+      if(i == -1) {
+          alert("Тебе передали поломанный предмет. Твой друг хакнул нас???");
+          return;
+      }
+      if(inv[i]) inv[i]+=1;
+      else inv[i] = 1;
+      log("Тебе передали крутой предмет! 🔥🔥🔥");
+      return;
+  }
+    log("Друг: " + data);
+  });
+}
+
+function sendMsg(){
+  text = document.getElementById("msg").value;
+  if(text.includes("/give")) {
+      text=text.replace("/give","").trim();
+      i=parseInt(text) || -1;
+      if(i == -1) {
+          alert("Невозможно передать этот предмет, его не существует.");
+          return;
+      }
+      conn.send("/give"+text);
+      log("Ты передаёшь другу предмет");
+      return;
+  }
+  if(text.includes("/w")) {
+      text=text.replace("/w","").trim();
+      
+      return;
+  }
+  if(text.includes("/smile")) {
+      log("Ты улыбнулся")
+      conn.send("Игрок улыбнулся");
+      return;
+  }
+  conn.send(text);
+  log("Ты: " + text);
+}
+
+function log(t){
+  const d = document.createElement("div");
+  d.textContent = t;
+  document.getElementById("log").appendChild(d);
+}
+bs=[];
+l=100;
+for(var bsv=0;bsv<l;bsv+=1) {t
+rc=Math.random() * 0xFFFFFF;
+var bsn=new THREE.MeshLambertMaterial({color:rc});
+sp=1;
+fly=0;
+const d=0;
+                             cow = `data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD/4gHYSUNDX1BST0ZJTEUAAQEAAAHIAAAAAAQwAABtbnRyUkdCIFhZWiAH4AABAAEAAAAAAABhY3NwAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAQAA9tYAAQAAAADTLQAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAlkZXNjAAAA8AAAACRyWFlaAAABFAAAABRnWFlaAAABKAAAABRiWFlaAAABPAAAABR3dHB0AAABUAAAABRyVFJDAAABZAAAAChnVFJDAAABZAAAAChiVFJDAAABZAAAAChjcHJ0AAABjAAAADxtbHVjAAAAAAAAAAEAAAAMZW5VUwAAAAgAAAAcAHMAUgBHAEJYWVogAAAAAAAAb6IAADj1AAADkFhZWiAAAAAAAABimQAAt4UAABjaWFlaIAAAAAAAACSgAAAPhAAAts9YWVogAAAAAAAA9tYAAQAAAADTLXBhcmEAAAAAAAQAAAACZmYAAPKnAAANWQAAE9AAAApbAAAAAAAAAABtbHVjAAAAAAAAAAEAAAAMZW5VUwAAACAAAAAcAEcAbwBvAGcAbABlACAASQBuAGMALgAgADIAMAAxADb/2wBDAFA3PEY8MlBGQUZaVVBfeMiCeG5uePWvuZHI////////////////////////////////////////////////////2wBDAVVaWnhpeOuCguv/////////////////////////////////////////////////////////////////////////wAARCAHtAuQDASIAAhEBAxEB/8QAGQABAAMBAQAAAAAAAAAAAAAAAAMEBQEC/8QANxABAAIBAgQEBQQBAwQCAwAAAAECAwQREiExUSIyQXETYYGRoRRCUrEzBVNiI0Ny4TSSY9Hx/8QAFAEBAAAAAAAAAAAAAAAAAAAAAP/EABQRAQAAAAAAAAAAAAAAAAAAAAD/2gAMAwEAAhEDEQA/ALoAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA5vHeDeO4OgAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAiyZ8ePrbee0AlR2zY6ztN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`;
+
+panda = `data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD/4gHYSUNDX1BST0ZJTEUAAQEAAAHIAAAAAAQwAABtbnRyUkdCIFhZWiAH4AABAAEAAAAAAABhY3NwAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAQAA9tYAAQAAAADTLQAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAlkZXNjAAAA8AAAACRyWFlaAAABFAAAABRnWFlaAAABKAAAABRiWFlaAAABPAAAABR3dHB0AAABUAAAABRyVFJDAAABZAAAAChnVFJDAAABZAAAAChiVFJDAAABZAAAAChjcHJ0AAABjAAAADxtbHVjAAAAAAAAAAEAAAAMZW5VUwAAAAgAAAAcAHMAUgBHAEJYWVogAAAAAAAAb6IAADj1AAADkFhZWiAAAAAAAABimQAAt4UAABjaWFlaIAAAAAAAACSgAAAPhAAAts9YWVogAAAAAAAA9tYAAQAAAADTLXBhcmEAAAAAAAQAAAACZmYAAPKnAAANWQAAE9AAAApbAAAAAAAAAABtbHVjAAAAAAAAAAEAAAAMZW5VUwAAACAAAAAcAEcAbwBvAGcAbABlACAASQBuAGMALgAgADIAMAAxADb/2wBDAFA3PEY8MlBGQUZaVVBfeMiCeG5uePWvuZHI////////////////////////////////////////////////////2wBDAVVaWnhpeOuCguv/////////////////////////////////////////////////////////////////////////wAARCAIYAjwDASIAAhEBAxEB/8QAGQABAQEBAQEAAAAAAAAAAAAAAAEEAgMF/8QALRABAQACAgEEAgICAgICAwAAAAECEQMhMQQSQVFhgRNxIpEysRShQlLB0fD/xAAVAQEBAAAAAAAAAAAAAAAAAAAAAf/EABQRAQAAAAAAAAAAAAAAAAAAAAD/2gAMAwEAAhEDEQA/AMYAAAAAAALAkAXzBI6k2oSb6MZffI9MMLuW+PFek4tZzLXaD24/+L0c4TUdAz+ptmNkY62eonXbHn1kDkVAFQBUAAFAAAAAAAAAAAAAAAAAAAAAAAXHG5XU7STb34cfidfkHrw8cx61295jpMMdR2B+yGlA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`;
+
+ch=`data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD/4gHYSUNDX1BST0ZJTEUAAQEAAAHIAAAAAAQwAABtbnRyUkdCIFhZWiAH4AABAAEAAAAAAABhY3NwAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAQAA9tYAAQAAAADTLQAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAlkZXNjAAAA8AAAACRyWFlaAAABFAAAABRnWFlaAAABKAAAABRiWFlaAAABPAAAABR3dHB0AAABUAAAABRyVFJDAAABZAAAAChnVFJDAAABZAAAAChiVFJDAAABZAAAAChjcHJ0AAABjAAAADxtbHVjAAAAAAAAAAEAAAAMZW5VUwAAAAgAAAAcAHMAUgBHAEJYWVogAAAAAAAAb6IAADj1AAADkFhZWiAAAAAAAABimQAAt4UAABjaWFlaIAAAAAAAACSgAAAPhAAAts9YWVogAAAAAAAA9tYAAQAAAADTLXBhcmEAAAAAAAQAAAACZmYAAPKnAAANWQAAE9AAAApbAAAAAAAAAABtbHVjAAAAAAAAAAEAAAAMZW5VUwAAACAAAAAcAEcAbwBvAGcAbABlACAASQBuAGMALgAgADIAMAAxADb/2wBDAFA3PEY8MlBGQUZaVVBfeMiCeG5uePWvuZHI////////////////////////////////////////////////////2wBDAVVaWnhpeOuCguv/////////////////////////////////////////////////////////////////////////wAARCADCAQMDASIAAhEBAxEB/8QAGAAAAwEBAAAAAAAAAAAAAAAAAAECAwT/xAAoEAACAgICAgIDAAIDAQAAAAAAAQIRITESQVFhAyIycYFCkROhseH/xAAWAQEBAQAAAAAAAAAAAAAAAAAAAQL/xAAWEQEBAQAAAAAAAAAAAAAAAAAAEQH/2gAMAwEAAhEDEQA/AFYU7wVGu0Uo+zDTN+1ZLkvJtJGUl5RRD8dCSz4YN9NB1QA6TtbGpvpk3/fTHxTyFbfG72v9BhvLbZnFeVftFJxeGqZFXwUcvRXF9UkTGM461/0Vy5YugJUUnl2NLkH1u6sb+RLGgFJ1rZKtbYuXjYlbCqlJLSyJ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`;
+earth = `data:image/webp;base64,UklGRrICAABXRUJQVlA4TKUCAAAvx8AxALXItW1bCasvS+3u7u7ubUb+fHEk9S0gF+IOeQqsJEkyHd7/Z5uj1fNz3EiSIo3/Di43D88y3D37D1uSpLDN9g8c2EmoA6Q8X/8durzHLQtii8LD6MXWHH2iL7lKrmVsqHXJRmNTFBQuycExo90DOONkaAxNniXDl/eITruKNueUIs40S4n6toAG9mA0ts4toVGyElVoRoSj+IwUld4oh9bDf4GMvjmZ0dgKuXBJEtaqlVijqdSGR6Ue0xQuSY52WWfqA5VokrVGXOmaxQYp2nw52j0gIk4aUY169jhBingIWw44WxbQVte2lEOKGU9odvJy2rtRG7kgq5V5GCVGBZ2c0ycq0G/FtrbDjM/Uxz9k1V0NoyRDKXfzOAd+zhH35kbAOI1civ7WiDPat/HgjziTpDw1NRpCLz+H1xTIY3Fc2KiNer4VMzowGRiJWGk0hA90GL9GY9NstsslNDiNPrwwSrY81KiUu8putNc3+am6eWG+Z6s4uZfLKfp/ES1p4lh9RopryN79WO8hfIVR4nG1VlGQUVcyGg3a44kxYZSsGIqoQcPgM8QZRUsRV9q+Zflxu6dMbJo1oQ0qV6O+PUT0JeexSZ1UqQPvRm2AJd6717n8o5ggNRqCYjYUm+1hlKwZlLf5lgznYofnUiLFqyb6sgfNT4WHoHjKXIrmmTmvaLE++PquRz9WcXFZUemWcmgru4z6sQl3oI16vuGSWE2sy9FEuVvb4AyjZBD8b6Q4I7eEhpZIMmT0Goh+CA0q0TSL0asmjG7QRqOrH2NjQ6NLNmrtGr36o/R+pHNYJEatRMUmtUcrsZLzqDQkkzu0ailHEQ2D5/up6/WBZvvGrcQox+ndY42iXIZmWVKkiMc/tvKBrrLb4U5I5b1kD5akAAA=`;
+board = "data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD/4gHYSUNDX1BST0ZJTEUAAQEAAAHIAAAAAAQwAABtbnRyUkdCIFhZWiAH4AABAAEAAAAAAABhY3NwAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAQAA9tYAAQAAAADTLQAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAlkZXNjAAAA8AAAACRyWFlaAAABFAAAABRnWFlaAAABKAAAABRiWFlaAAABPAAAABR3dHB0AAABUAAAABRyVFJDAAABZAAAAChnVFJDAAABZAAAAChiVFJDAAABZAAAAChjcHJ0AAABjAAAADxtbHVjAAAAAAAAAAEAAAAMZW5VUwAAAAgAAAAcAHMAUgBHAEJYWVogAAAAAAAAb6IAADj1AAADkFhZWiAAAAAAAABimQAAt4UAABjaWFlaIAAAAAAAACSgAAAPhAAAts9YWVogAAAAAAAA9tYAAQAAAADTLXBhcmEAAAAAAAQAAAACZmYAAPKnAAANWQAAE9AAAApbAAAAAAAAAABtbHVjAAAAAAAAAAEAAAAMZW5VUwAAACAAAAAcAEcAbwBvAGcAbABlACAASQBuAGMALgAgADIAMAAxADb/2wBDAFA3PEY8MlBGQUZaVVBfeMiCeG5uePWvuZHI////////////////////////////////////////////////////2wBDAVVaWnhpeOuCguv/////////////////////////////////////////////////////////////////////////wAARCAG/Ab8DASIAAhEBAxEB/8QAFwABAQEBAAAAAAAAAAAAAAAAAAECA//EABwQAQEBAQEBAQEBAAAAAAAAAAARARJhUTECIf/EABYBAQEBAAAAAAAAAAAAAAAAAAABAv/EABQRAQAAAAAAAAAAAAAAAAAAAAD/2gAMAwEAAhEDEQA/AMAMtBoaAAAAAACgIAAAAAAAAAAAAAAAAIAoKigAIAAAAAAAAAAAAAACKigACf1+ov8AX6ggADQAoaAAAAAAAKJSgolKCjPR14DQz0vQKJSgolKCiUoKIoAAIAAqKAAACUFEpQUSlBRKUFAAAAAAQKAFKCf1+ou/6kEAhAaAFAAAAAAAAAAA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";
+help = `<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <title>Справка</title>
+    <base target="_self">
+</head>
+<style>
+    body {
+        background: white;
+    }
+</style>
+<body>
+    <h1>Справка</h1>
+    <ul>
+        <li><a style="color: blue; text-decoration: underline;" onclick="location.hash='new';">Создание</a></li>
+    </ul>
+    <p>CubeGame - это игра, в которой нужно выживать.</p>
+    <p>В пропасть ходить не рекомендуется — умрёшь.</p>
+    <p>Если даже ты умрёшь... Можно возродится!</p>
+    <p>Чтобы восполнять голод, нужно убивать животных и больше есть.</p>
+    <div id="new">
+        <h2>Создание</h2>
+        Чтобы создавать, нажмите на кнопку "***".
+        <h3>1. Крылья</h3>
+        <p>Кому хочется падать в пропасть? Никому. А летать? Всем.</p>
+        <p>Для этого нужны КРЫЛЬЯ — и для них не надо сделать супер-испытание! Всего-то убить 3 куриц, от которых выпадет 30 перьев. Создайте крылья, и летайте! Даже боятся падания в пропасть не нужно.</p>
+        <p>Не летайте без досок. Это будет самая глупая смерть в игре. Доски то не тратятся, но если летать без них... НЕТ, НЕ ДЕЛАЙТЕ ТАК!</p>
+        <h3>2. Доски</h3>
+        <p>Постройте дом из досок! Но как же сделать доски?</p>
+        <p>Понадобится сломать дерево, вам придёт в инвентарь бревно. 1 бревно = 4 доски. Продробнее о спавне деревьев узнайте в следущих вкладках.</p>
+    </div>
+</body>
+</html>`;
+h.srcdoc = help;
+const request = indexedDB.open('GameDB', 1);
+let db;
+request.onupgradeneeded = function(e) {
+    db = e.target.result;
+    db.createObjectStore('blocks', { keyPath: 'id', autoIncrement: true });
+};
+request.onsuccess = function(e) {
+    db = e.target.result;
+};
+
+if (!window.dbRequest) {
+    window.dbRequest = indexedDB.open('GameDB', 1);
+    window.dbRequest.onupgradeneeded = function(e) {
+        window.db = e.target.result;
+        if (!window.db.objectStoreNames.contains('blocks')) {
+            window.db.createObjectStore('blocks', { keyPath: 'id', autoIncrement: true });
+        }
+    };
+    window.dbRequest.onsuccess = function(e) {
+        window.db = e.target.result;
+        load();
+    };
+}
+
+function save() {
+    if(!window.db) return;
+    const tx = window.db.transaction('blocks', 'readwrite');
+    const store = tx.objectStore('blocks');
+    store.clear();
+    blocks.forEach((block, index) => {
+        store.put({
+            id: 'block_' + index,
+            x: block.position.x,
+            y: block.position.y,
+            z: block.position.z,
+            type: block.userData["t"]
+        });
+    });
+    console.log(blocks[10].userData["t"]);
+    store.put({ id: 'player', x: camera.position.x, y: camera.position.y, z: camera.position.z, yaw: yaw, pitch: pitch, fly: fly });
+    store.put({ id: 'inv', inv: JSON.stringify(inv) });
+    console.log('SAVE OK');
+}
+
+function load() {
+    if(!db) {
+        setTimeout(load, 100);
+        return;
+    }
+    const tx = db.transaction('blocks', 'readonly');
+    const store = tx.objectStore('blocks');
+    const getAll = store.getAll();
+    getAll.onsuccess = function() {
+        if(!getAll.result.length) {
+            return;
+        }
+        
+        let playerPos = null;
+        let inventory = null;
+        let blocksToAdd = [];
+        fp=[];
+        
+        getAll.result.forEach(data => {
+             if(data.id === 'inv') {
+                inventory = data;
+            } else if(data.id && data.id.startsWith('block_')) {
+                blocksToAdd.push(data);
+            } else if(data.id === 'player') {
+                playerPos = data;
+            }
+            else if(data.id === 'vars') {
+                fp = data;
+            }
+        });
+        
+        blocks.forEach(b => scene.remove(b));
+        blocks = [];
+        bm = new THREE.Mesh(new THREE.BoxGeometry(1,1,1),board);
+        fly = fp[0];
+        i=0;
+        const boardTex = new THREE.TextureLoader().load(board);
+const boardMat = new THREE.MeshLambertMaterial({ map: boardTex });
+        if (playerPos.fly !== undefined) {
+                fly = playerPos.fly;
+            }
+ blocksToAdd.forEach(data => {
+
+    let mat;
+
+    if (data.type == 0) {
+        mat = eb;        // земля (коричневая)
+    }
+    else if (data.type== 1) {
+        mat = b;         // блок
+    }
+    else if (data.type === 2) {
+        mat = boardMat;     // доски
+        i+=1;
+    }
+    else if (data.type === 3) {
+        mat = tr;        // листья (зелёные)
+    }
+    else {
+        mat = board;
+    }
+    add(data.x, data.y, data.z, mat, data.type);
+
+});
+
+        console.log(i)
+        if(playerPos) {
+            camera.position.set(playerPos.x, playerPos.y + 1, playerPos.z);
+            yaw = playerPos.yaw;
+            pitch = playerPos.pitch;
+        }
+        
+        if(inventory) {
+            inv = JSON.parse(inventory.inv);
+            idvu();
+        }
+    };
+}
+                             function invd(t,v=1) {
+    if(inv[t]) {
+        inv[t]+=v;
+    }
+    else {
+        inv[t] = v;
+    }
+    idvu();
+}
+function kill() {
+    inv = {};
+    fly=0;
+    indexedDB.deleteDatabase('GameDB');
+    alert("Ваш мир удалён!");
+}
+function isbup() {
+    // Позиция игрока (камеры)
+    var pos = camera.position.clone();
+    pos.y -= 1.6;
+    // Пускаем луч строго вниз
+    var ray = new THREE.Raycaster(
+        pos,                          // начальная точка
+        new THREE.Vector3(0, -1, 0)   // направление вниз
+    );
+    
+    // Проверяем пересечение с блоками
+    var hits = ray.intersectObjects(blocks);
+    
+    // Если есть попадание и оно достаточно близко (например, меньше 2 блоков)
+    if (hits.length > 0 && hits[0].distance < 2) {
+        return true; // блок под игроком
+    }
+    return false; 
+}
+bs.push(bsn);
+var inv={};
+la=["ch","c","ch","c","ch","c","ch","c","ch","p"];
+}
+function re(array) {
+    return array[Math.floor(Math.random() * array.length)];
+}
+addEventListener("touchstart",function(e){
+    lastX=e.touches[0].clientX
+    lastY=e.touches[0].clientY
+})
+addEventListener("touchmove",function(e){
+    var dx=e.touches[0].clientX-lastX
+    var dy=e.touches[0].clientY-lastY
+    yaw-=dx*0.005
+    pitch-=dy*0.005
+    if(pitch>1.5)pitch=1.5
+    if(pitch<-1.5)pitch=-1.5
+    lastX=e.touches[0].clientX
+    lastY=e.touches[0].clientY
+});
+var bb = document.getElementById("break");
+bb.ontouchstart = function() {
+    ray.setFromCamera({x:0,y:0}, camera)
+    var h = ray.intersectObjects(blocks)
+    if (h.length) {
+    i = h[0].object;
+    u=i.userData["t"];
+    if(u == 0) invd(4);
+    if(u == 1) invd(5);
+    if(u == 2) invd(6);
+    if(u == 3) invd(7);
+        scene.remove(i)
+        blocks.splice(blocks.indexOf(h[0].object), 1)
+    }
+}
+function add(x,y,z,mat,t=0){
+    var m=new THREE.Mesh(new THREE.BoxGeometry(1,1,1),mat);
+    m.userData = { "t": t }
+    m.position.set(x,y,z);
+    scene.add(m);
+    blocks.push(m)
+}
+bd = [];
+const speed = 0.1;
+function rd() {
+    const dir = new THREE.Vector3(
+        Math.random() - 0.5,
+        0,
+        Math.random() - 0.5
+    );
+    return dir.normalize();
+}
+function cr(t) {
+    if(t==0) {
+        n=inv[2];
+        if(n>=30) {
+            inv[2]=n-30;
+            if(!fly) fly=1;
+            else invd(3);
+            ww=ww+459;
+            alert("Успешно создано!")
+        }
+        else {
+            alert("Не хватает материалов.")
+        }
+    }
+    if(t==1) {
+        n=inv[5];
+        if(n) {
+            inv[5]=n-1;
+            invd(6,4);
+        }
+    idvu();
+    }
+}
+function pb() {
+key = d;
+k="";
+if(key==4) {
+        k='data:image/webp;base64,UklGRrICAABXRUJQVlA4TKUCAAAvx8AxALXItW1bCasvS+3u7u7ubUb+fHEk9S0gF+IOeQqsJEkyHd7/Z5uj1fNz3EiSIo3/Di43D88y3D37D1uSpLDN9g8c2EmoA6Q8X/8durzHLQtii8LD6MXWHH2iL7lKrmVsqHXJRmNTFBQuycExo90DOONkaAxNniXDl/eITruKNueUIs40S4n6toAG9mA0ts4toVGyElVoRoSj+IwUld4oh9bDf4GMvjmZ0dgKuXBJEtaqlVijqdSGR6Ue0xQuSY52WWfqA5VokrVGXOmaxQYp2nw52j0gIk4aUY169jhBingIWw44WxbQVte2lEOKGU9odvJy2rtRG7kgq5V5GCVGBZ2c0ycq0G/FtrbDjM/Uxz9k1V0NoyRDKXfzOAd+zhH35kbAOI1civ7WiDPat/HgjziTpDw1NRpCLz+H1xTIY3Fc2KiNer4VMzowGRiJWGk0hA90GL9GY9NstsslNDiNPrwwSrY81KiUu8putNc3+am6eWG+Z6s4uZfLKfp/ES1p4lh9RopryN79WO8hfIVR4nG1VlGQUVcyGg3a44kxYZSsGIqoQcPgM8QZRUsRV9q+Zflxu6dMbJo1oQ0qV6O+PUT0JeexSZ1UqQPvRm2AJd6717n8o5ggNRqCYjYUm+1hlKwZlLf5lgznYofnUiLFqyb6sgfNT4WHoHjKXIrmmTmvaLE++PquRz9WcXFZUemWcmgru4z6sQl3oI16vuGSWE2sy9FEuVvb4AyjZBD8b6Q4I7eEhpZIMmT0Goh+CA0q0TSL0asmjG7QRqOrH2NjQ6NLNmrtGr36o/R+pHNYJEatRMUmtUcrsZLzqDQkkzu0ailHEQ2D5/up6/WBZvvGrcQox+ndY42iXIZmWVKkiMc/tvKBrrLb4U5I5b1kD5akAAA=';
+}
+if(key==6) {
+   k=board;
+    }
+return k;
+}
+function idvu() {
+onc="";
+res="|"
+for (let key in inv) {
+    let value = inv[key];
+    if(key==0) {
+        k="🥩";
+        onc="hp++;"
+    }
+    if(key==1) {
+        k="🎋";
+    }
+    if(key==2) {
+        k="🪶";
+    }
+    if(key==3) {
+        k="🪽";
+    }
+    if(key==4) {
+        k='<img width="10" height="10" src="data:image/webp;base64,UklGRrICAABXRUJQVlA4TKUCAAAvx8AxALXItW1bCasvS+3u7u7ubUb+fHEk9S0gF+IOeQqsJEkyHd7/Z5uj1fNz3EiSIo3/Di43D88y3D37D1uSpLDN9g8c2EmoA6Q8X/8durzHLQtii8LD6MXWHH2iL7lKrmVsqHXJRmNTFBQuycExo90DOONkaAxNniXDl/eITruKNueUIs40S4n6toAG9mA0ts4toVGyElVoRoSj+IwUld4oh9bDf4GMvjmZ0dgKuXBJEtaqlVijqdSGR6Ue0xQuSY52WWfqA5VokrVGXOmaxQYp2nw52j0gIk4aUY169jhBingIWw44WxbQVte2lEOKGU9odvJy2rtRG7kgq5V5GCVGBZ2c0ycq0G/FtrbDjM/Uxz9k1V0NoyRDKXfzOAd+zhH35kbAOI1civ7WiDPat/HgjziTpDw1NRpCLz+H1xTIY3Fc2KiNer4VMzowGRiJWGk0hA90GL9GY9NstsslNDiNPrwwSrY81KiUu8putNc3+am6eWG+Z6s4uZfLKfp/ES1p4lh9RopryN79WO8hfIVR4nG1VlGQUVcyGg3a44kxYZSsGIqoQcPgM8QZRUsRV9q+Zflxu6dMbJo1oQ0qV6O+PUT0JeexSZ1UqQPvRm2AJd6717n8o5ggNRqCYjYUm+1hlKwZlLf5lgznYofnUiLFqyb6sgfNT4WHoHjKXIrmmTmvaLE++PquRz9WcXFZUemWcmgru4z6sQl3oI16vuGSWE2sy9FEuVvb4AyjZBD8b6Q4I7eEhpZIMmT0Goh+CA0q0TSL0asmjG7QRqOrH2NjQ6NLNmrtGr36o/R+pHNYJEatRMUmtUcrsZLzqDQkkzu0ailHEQ2D5/up6/WBZvvGrcQox+ndY42iXIZmWVKkiMc/tvKBrrLb4U5I5b1kD5akAAA=">';
+    }
+    if(key==5) {
+    k="🪵";
+    }
+    if(key==6) {
+    k=`<img width="10" height="10" src="${board}">`;
+    }
+    if(key==7) {
+        k="💊";
+        onc="hpv+=1;hpvmax+=0.1;inv[7]-=1;idvu()"
+    }
+    if(value) {
+        res=res+`<button onclick="d=${key};${onc}">`+k+value+"</button>|";
+    }
+}
+    idv.innerHTML = res+`<button onclick="c.style.display='block';">***</button>`;
+}
+add(0,0,0,b);
+document.title = "Генерация мира...";
+/*
+// генерация блоков
+const et = new THREE.TextureLoader().load(earth);
+eb = new THREE.MeshStandardMaterial({ map: et }); 
+//земля
+for(var x=-10;x<3;x++)
+for(var z=-10;z<5;z++)
+add(x,0,z,eb)
+// земля(остальное)
+var radius = 10;
+var angle = 10; 
+for(var zx=-10;zx<1000;zx++) {
+    for(var i = 0; i < 10; i++) {
+        angle += 0.01;
+        var x = Math.round(Math.cos(angle) * radius);
+        var z = Math.round(Math.sin(angle) * radius);
+        add(x, 0, z, eb);
+    }
+    if (angle > Math.PI * 2) {
+        radius += 1;
+        angle = 0;
+    }
+}
+// трава
+s=2;
+for(var x=-3;x<3;x+=1)
+for(var z=-3;z<3;z+=1)
+add(x,s,s,tr);s+=2;
+*/
+// Генерация мира 100×100 блоков
+// генерация блоков
+const et = new THREE.TextureLoader().load(earth);
+eb = new THREE.MeshStandardMaterial({ map: et }); 
+for (var x = -50; x < 50; x++) {
+    for (var z = -50; z < 50; z++) {
+        add(x, 0, z, eb, 0);
+    }
+}
+      document.title = "Игра"
+var move={w:0,s:0,a:0,d:0}
+up.ontouchstart=function(){move.w=1}
+up.ontouchend=function(){move.w=0}
+down.ontouchstart=function(){move.s=1}
+down.ontouchend=function(){move.s=0}
+left.ontouchstart=function(){move.a=1}
+left.ontouchend=function(){move.a=0}
+right.ontouchstart=function(){move.d=1}
+right.ontouchend=function(){move.d=0}
+place.ontouchstart = function() {
+    ray.setFromCamera({x:0,y:0}, camera);
+    var h = ray.intersectObjects(blocks);
+    if (h.length && inv[d] > 0) {
+        var p = h[0].object.position;
+        var n = h[0].face.normal;
+        
+        // Определяем материал и тип
+        var material;
+        var blockType = 0;
+        
+        if (d == 4) { // земля
+            const et = new THREE.TextureLoader().load(pb());
+            material = new THREE.MeshStandardMaterial({ map: et });
+            blockType = 0;
+        }
+        else if (d == 5) { // дерево
+            material = b;  // ИСПОЛЬЗУЕМ ГОТОВЫЙ МАТЕРИАЛ b
+            blockType = 1;
+        }
+        else if (d == 6) { // доски
+            const et = new THREE.TextureLoader().load(pb());
+            material = new THREE.MeshStandardMaterial({ map: et });
+            blockType = 2;
+        }
+        
+        // Создаем блок
+        add(p.x + n.x, p.y + n.y, p.z + n.z, material, blockType);
+        
+        // Уменьшаем количество
+        inv[d] -= 1;
+        idvu();
+    }
+}
+camera.position.set(0,2.77,0);
+function tree() {
+    x=Math.floor(Math.random() * 100) - Math.floor(Math.random() * 100);
+    z=Math.floor(Math.random() * 100) - Math.floor(Math.random() * 100);
+    for(var y=0;y<6;y+=1) {
+    add(x, y, z, b, 1);
+    }
+    for(var dx = -1; dx <= 1; dx++) {
+        for(var dz = -1; dz <= 1; dz++) {
+            for(var dy = 0; dy <= 2; dy++) {
+                add(x + dx, 6 + dy, z + dz, tr, 3);
+            }
+        }
+    }
+}
+bd = [];
+function addd() {
+a=re(la);
+t="";
+if(a=="c") t=cow;
+if(a=="p") t=panda;
+if(a=="ch") t=ch;
+const texture = new THREE.TextureLoader().load(t);
+    const material = new THREE.MeshStandardMaterial({ map: texture });
+    bdb = new THREE.Mesh(new THREE.BoxGeometry(1, 1, 2), material);
+    bdb.position.y = 2;
+    bdb.userData = { special: true, an: a };
+    scene.add(bdb);
+    bd.push(bdb);
+}
+addd();
+for(var tri = 0; tri <= 20; tri++) {
+tree();
+addd();
+}
+u.ontouchstart=function() {
+    if(fly) {
+    camera.position.y+=1;
+    ww-=1;
+    if(!ww) {
+        kill();
+        alert("Вы умерли. Причина: прочность крыльев не вечна");
+        save();
+        location.reload();
+    }
+    if(!inv[6]) {
+    kill();
+        alert("Вы умерли. Причина: летаем без досок?");
+        save();
+        location.reload();
+    }
+    }
+    else {
+        camera.position.y+=1;
+        setTimeout(()=>{camera.position.y-=1;},200);
+    }
+}
+d.ontouchstart=function(){
+    if(fly) {
+    camera.position.y-=1;
+    ww-=1;
+    if(!ww) {
+        kill();
+        alert("Вы умерли. Причина: прочность крыльев не вечна");
+        save();
+        location.reload();
+    }
+    }
+}
+document.addEventListener("touchstart", function(e) {
+    if (e.target.tagName === 'BUTTON') return;
+    var touch = e.touches[0];
+    var mouse = new THREE.Vector2(
+        (touch.clientX / window.innerWidth) * 2 - 1,
+        -(touch.clientY / window.innerHeight) * 2 + 1
+    );
+    ray.setFromCamera(mouse, camera);
+    var hits = ray.intersectObjects(bd);
+    if (hits.length && hits[0].object.userData.special) {
+       var a = hits[0].object.userData.an;
+       i = 0;
+       v=1;
+       if(a=="c") i=0;
+else if(a=="p") i=1;
+else if(a=="ch") {i=2; v=8};
+        var obj = hits[0].object;
+        obj.material.color.setHex(0xff000a);
+        setTimeout(() => {
+        scene.remove(obj);
+        bd.splice(bd.indexOf(obj),1);
+        invd(i,v);
+        },1000);
+    } else {
+        lastX = touch.clientX;
+        lastY = touch.clientY;
+    }
+});
+htu=0;
+setInterval (()=>{
+    fps.textContent = htu;
+    htu=0;
+},1000)
+ht=0;
+direction = rd();
+function loop() {
+    camera.rotation.order="YXZ"
+    camera.rotation.y=yaw
+    camera.rotation.x=pitch
+    var oldPos = camera.position.clone();
+    var dir=new THREE.Vector3()
+    camera.getWorldDirection(dir)
+    dir.y=0
+    dir.normalize()
+    var right=new THREE.Vector3(-dir.z,0,dir.x)
+    if(move.w)camera.position.add(dir.multiplyScalar(sp/10))
+    if(move.s)camera.position.add(dir.multiplyScalar(-sp/10))
+    if(move.a)camera.position.add(right.multiplyScalar(-sp/10))
+    if(move.d)camera.position.add(right.multiplyScalar(sp/10))
+    wwi.textContent = ww;
+    if(!fly) { // Проверяем только когда не в полёте
+        // Создаём "коробку" игрока (примерно 0.6 ширины и 1.8 высоты)
+        var playerBox = new THREE.Box3(
+            new THREE.Vector3(
+                camera.position.x - 0.3,
+                camera.position.y - 1.5,  // нижняя точка (ноги)
+                camera.position.z - 0.3
+            ),
+            new THREE.Vector3(
+                camera.position.x + 0.3,
+                camera.position.y + 0.3,  // верхняя точка (глаза)
+                camera.position.z + 0.3
+            )
+        );
+        // В функцию loop() перед renderer.render
+// Не рендерим далёкие блоки
+var frustum = new THREE.Frustum();
+var projScreenMatrix = new THREE.Matrix4();
+projScreenMatrix.multiplyMatrices(camera.projectionMatrix, camera.matrixWorldInverse);
+frustum.setFromProjectionMatrix(projScreenMatrix);
+
+blocks.forEach(block => {
+    var sphere = new THREE.Sphere(block.position.clone(), 1);
+    block.visible = frustum.intersectsSphere(sphere);
+});
+        // Проверяем каждый блок
+        var collision = false;
+        for(var i = 0; i < blocks.length; i++) {
+            var block = blocks[i];
+            
+            // Создаём коробку блока
+            var blockBox = new THREE.Box3(
+                new THREE.Vector3(
+                    block.position.x - 0.5,
+                    block.position.y - 0.5,
+                    block.position.z - 0.5
+                ),
+                new THREE.Vector3(
+                    block.position.x + 0.5,
+                    block.position.y + 0.5,
+                    block.position.z + 0.5
+                )
+            );
+            
+            // Если коробки пересекаются
+            if(playerBox.intersectsBox(blockBox)) {
+                collision = true;
+                break;
+            }
+        }
+        
+        // Если врезались - возвращаемся назад
+        if(collision) {
+            camera.position.copy(oldPos);
+        }
+    }
+    
+    // Если врезались в блок — пробуем подняться
+if (collision && (move.w || move.s || move.a || move.d)) {
+    let oldY = camera.position.y;
+    
+    // Поднимаем игрока на 1 блок
+    camera.position.y += 1.0;
+
+    // Проверяем, не врезается ли он теперь в другой блок сверху
+    let newPlayerBox = new THREE.Box3(
+        new THREE.Vector3(camera.position.x - 0.3, camera.position.y - 1.5, camera.position.z - 0.3),
+        new THREE.Vector3(camera.position.x + 0.3, camera.position.y + 0.3, camera.position.z + 0.3)
+    );
+
+    let newCollision = false;
+    for (let i = 0; i < blocks.length; i++) {
+        let blockBox = new THREE.Box3(
+            new THREE.Vector3(blocks[i].position.x - 0.5, blocks[i].position.y - 0.5, blocks[i].position.z - 0.5),
+            new THREE.Vector3(blocks[i].position.x + 0.5, blocks[i].position.y + 0.5, blocks[i].position.z + 0.5)
+        );
+
+        if (newPlayerBox.intersectsBox(blockBox)) {
+            newCollision = true;
+            break;
+        }
+    }
+
+    // Если сверху тоже блок — возвращаемся назад
+    if (newCollision) {
+        camera.position.y = oldY;
+        camera.position.copy(oldPos); // полностью откатываем движение
+    }
+    // иначе — оставляем на новом месте (поднялись)
+}
+    for(var i = 0; i < bd.length; i++) {
+    if(ht % 50 === 0) {
+        direction = rd();
+    }
+    bd[i].position.addScaledVector(direction, speed);
+    }
+    if(ht % 200 === 0) {
+        save();
+    }
+    if(ht % 1600 === 0) {
+        addd();
+        tree();
+    }
+    if(ht % 3200 === 0) {
+    tree();
+    }
+    if(!fly) {
+    if(!isbup()) {
+    hpv-=0.02;
+    camera.position.y-=0.90;
+    }
+    }
+    ht+=1;
+    htu++;
+    hp.textContent = `${hpv}/${hpvmax}`;
+    if(hpv <= 0) {
+        setTimeout (
+            () => {
+                alert("Вы умерли обычной смертью.")
+            }, 1000
+        );
+        kill();
+        location.reload();
+    }
+    renderer.render(scene,camera)
+    requestAnimationFrame(loop)
+}
+
+loop();    
+    </script>
+</body>
+</html>
+      
